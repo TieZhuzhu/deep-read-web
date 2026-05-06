@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Read the final HTML of a public or login-protected page with Playwright."""
 
@@ -175,6 +175,20 @@ def contains_login_keyword(value: str) -> bool:
     return any(keyword in lowered for keyword in LOGIN_KEYWORDS)
 
 
+def is_http_url(url: str) -> bool:
+    """Return True when the URL uses http or https."""
+    return (url or "").startswith(("http://", "https://"))
+
+
+def hosts_share_scope(left_host: str, right_host: str) -> bool:
+    """Return True when two hosts are the same or have a parent/subdomain relationship."""
+    left = (left_host or "").strip().lower()
+    right = (right_host or "").strip().lower()
+    if not left or not right:
+        return False
+    return left == right or left.endswith(f".{right}") or right.endswith(f".{left}")
+
+
 def find_browser_executable(browser_name: str) -> str | None:
     """Return the first matching branded browser path when present."""
     for candidate in WINDOWS_BROWSER_PATHS.get(browser_name, ()):
@@ -297,6 +311,7 @@ def get_first_page(context):
 
 def configure_page_timeouts(context, timeout_ms: int = 3000) -> None:
     """Keep page-level waits short while polling login state."""
+
     def on_page(new_page):
         new_page.set_default_timeout(timeout_ms)
 
@@ -348,9 +363,11 @@ def is_login_page(page, target_url: str) -> bool:
 
     url_has_keyword = contains_login_keyword(current_url)
     title_has_keyword = contains_login_keyword(title)
-    host_changed = bool(current_host and target_host and current_host != target_host)
+    host_left_target_scope = bool(
+        current_host and target_host and not hosts_share_scope(current_host, target_host)
+    )
 
-    if host_changed and url_has_keyword:
+    if host_left_target_scope and url_has_keyword:
         return True
 
     input_count = safe_locator_count(page, "input")
@@ -363,20 +380,37 @@ def is_login_page(page, target_url: str) -> bool:
         "input[id*='email' i], input[id*='login' i], input[id*='account' i], "
         "input[id*='phone' i]"
     )
-    if (url_has_keyword or title_has_keyword or host_changed) and safe_locator_count(page, account_selector) > 0:
+    if (
+        url_has_keyword or title_has_keyword or host_left_target_scope
+    ) and safe_locator_count(page, account_selector) > 0:
         return True
 
     return False
 
 
-def ready_page_sort_key(page, target_url: str) -> tuple[int, int, int]:
+def is_allowed_result_page(page, target_url: str) -> bool:
+    """Return True when a page looks like the target site's final readable page."""
+    page_url = page.url or ""
+    if not is_http_url(page_url):
+        return False
+
+    page_host = normalize_host(page_url)
+    target_host = normalize_host(target_url)
+    if not hosts_share_scope(page_host, target_host):
+        return False
+
+    return not is_login_page(page, target_url)
+
+
+def ready_page_sort_key(page, target_url: str) -> tuple[int, int, int, int]:
     """Score readable pages so we pick the most likely content page."""
     page_url = page.url or ""
-    if not page_url.startswith(("http://", "https://")):
-        return (2, 2, 2)
+    if not is_http_url(page_url):
+        return (3, 3, 3, 3)
 
     target_host = normalize_host(target_url)
     page_host = normalize_host(page_url)
+    host_scope_match = hosts_share_scope(target_host, page_host)
     same_host = target_host == page_host
 
     target_url_trimmed = target_url.rstrip("/")
@@ -388,6 +422,7 @@ def ready_page_sort_key(page, target_url: str) -> tuple[int, int, int]:
     path_prefix = page_path.startswith(target_path) if len(target_path) > 1 else True
 
     return (
+        0 if host_scope_match else 1,
         0 if same_host else 1,
         0 if exact_match else 1,
         0 if path_prefix else 1,
@@ -398,7 +433,7 @@ def pick_ready_page(context, target_url: str):
     """Return the best non-login page currently available in the context."""
     candidates = []
     for page in iter_open_pages(context):
-        if not is_login_page(page, target_url):
+        if is_allowed_result_page(page, target_url):
             candidates.append(page)
 
     if not candidates:
@@ -455,7 +490,9 @@ def read_html_after_manual_login(
     playwright_timeout_error,
 ):
     """Open a visible browser and wait for the user to complete authentication."""
-    eprint(f"检测到页面可能需要登录，已打开浏览器窗口。请在 {auth_timeout} 秒内完成登录鉴权。")
+    eprint(
+        f"检测到页面可能需要登录，已打开浏览器窗口。请在 {auth_timeout} 秒内完成登录鉴权。"
+    )
     context = open_context(playwright, browser_name, headless=False)
     try:
         configure_page_timeouts(context)
@@ -475,7 +512,9 @@ def read_html_after_manual_login(
 
             time.sleep(1)
 
-        raise AuthTimeoutError(f"登录鉴权超时：超过 {auth_timeout} 秒仍未检测到登录成功。")
+        raise AuthTimeoutError(
+            f"登录鉴权超时：超过 {auth_timeout} 秒仍未检测到已回到目标站点的内容页。"
+        )
     finally:
         safe_close_context(context)
 
