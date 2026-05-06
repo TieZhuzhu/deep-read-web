@@ -4,12 +4,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 function Get-PythonCommand {
-    if (Get-Command py -ErrorAction SilentlyContinue) {
-        return @("py", "-3")
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py -and $py.Source) {
+        return @($py.Source, "-3")
     }
 
-    if (Get-Command python -ErrorAction SilentlyContinue) {
-        return @("python")
+    if ($python -and $python.Source) {
+        return @($python.Source)
     }
 
     throw "Python not found. Please install Python 3 first."
@@ -23,6 +25,8 @@ $prefix = @()
 if ($pythonCommand.Length -gt 1) {
     $prefix = $pythonCommand[1..($pythonCommand.Length - 1)]
 }
+
+Write-Host ("Using Python command: " + (($pythonCommand | ForEach-Object { $_ }) -join " ")) -ForegroundColor DarkGray
 
 function Invoke-Python {
     param([string[]]$Arguments)

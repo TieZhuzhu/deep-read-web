@@ -22,9 +22,9 @@ jobs:
       - name: Install Playwright
         shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install playwright
-          python -m playwright install chromium firefox
+          py -3 -m pip install --upgrade pip
+          py -3 -m pip install playwright
+          py -3 -m playwright install chromium firefox
 
       - name: Run verification
         shell: pwsh
