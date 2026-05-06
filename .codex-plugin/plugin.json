@@ -1,0 +1,31 @@
+{
+  "name": "deep-read-web",
+  "version": "0.1.0",
+  "description": "Read the full HTML of public or manually authenticated web pages with Playwright.",
+  "author": {
+    "name": "August Lee"
+  },
+  "keywords": [
+    "web",
+    "playwright",
+    "html",
+    "authentication",
+    "browser"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Deep Read Web",
+    "shortDescription": "Read page HTML from public and login-protected pages",
+    "longDescription": "Deep Read Web lets Codex open a target page, detect when manual login is required, wait for authentication in a visible browser window, and return the final page HTML for downstream analysis.",
+    "developerName": "August Lee",
+    "category": "Research",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Read the HTML of this protected web page and wait for me to log in if needed."
+    ],
+    "screenshots": []
+  }
+}

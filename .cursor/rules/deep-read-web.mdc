@@ -1,0 +1,20 @@
+---
+description: Read public or login-protected web pages by running the deep_read.py Playwright script and using its stdout HTML as context.
+alwaysApply: false
+---
+
+# Deep Read Web
+
+- Use this rule when the user asks to read a web page, extract the full HTML of a page, or analyze content behind a manual login flow.
+- Run the repository script at `skills/deep-read-web/scripts/deep_read.py`.
+- Prefer `py -3` on Windows. If `py -3` is unavailable, try `python`.
+- Use this command shape:
+
+```bash
+py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+```
+
+- Add `--browser <value>` only when the user explicitly asks for a browser.
+- Treat the script's `stdout` as the authoritative final-page HTML.
+- If the script reports that Python or Playwright is missing, explain the dependency and point the user to the repository README for setup.
+- Do not ask the user to paste cookies, passwords, or tokens into chat.
