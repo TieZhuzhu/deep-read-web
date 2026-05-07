@@ -482,16 +482,19 @@ def read_html_without_login(playwright, browser_name: str, url: str, playwright_
     try:
         configure_page_timeouts(context)
         page = get_first_page(context)
-        navigate_and_wait(page, url, playwright_timeout_error)
+        try:
+            navigate_and_wait(page, url, playwright_timeout_error)
+        except Exception as exc:
+            return True, None, f"无头访问目标页面失败：{exc}"
 
         ready_page = pick_ready_page(context, url)
         if ready_page is not None:
-            return False, ready_page.content()
+            return False, ready_page.content(), None
 
         if is_login_page(page, url):
-            return True, None
+            return True, None, "检测到页面需要登录鉴权。"
 
-        return False, page.content()
+        return False, page.content(), None
     finally:
         safe_close_context(context)
 
@@ -502,16 +505,24 @@ def read_html_after_manual_login(
     url: str,
     auth_timeout: int,
     playwright_timeout_error,
+    reason: str | None = None,
 ):
     """Open a visible browser and wait for the user to complete authentication."""
-    eprint(
-        f"检测到页面可能需要登录，已打开浏览器窗口。请在 {auth_timeout} 秒内完成登录鉴权。"
-    )
+    prompt = "检测到页面可能需要登录，已打开浏览器窗口。"
+    if reason:
+        prompt = f"{reason} 已自动打开浏览器窗口。"
+    eprint(f"{prompt} 请在 {auth_timeout} 秒内完成访问或登录鉴权。")
     context = open_context(playwright, browser_name, headless=False)
     try:
         configure_page_timeouts(context)
         page = get_first_page(context)
-        navigate_and_wait(page, url, playwright_timeout_error)
+        try:
+            navigate_and_wait(page, url, playwright_timeout_error)
+        except Exception as exc:
+            eprint(
+                "自动访问目标页面失败，"
+                f"详情：{exc}。请在已打开的浏览器中手动访问目标页面并完成登录鉴权。"
+            )
 
         deadline = time.monotonic() + auth_timeout
         while time.monotonic() < deadline:
@@ -538,7 +549,7 @@ def run(args: argparse.Namespace) -> str:
     sync_playwright, _, playwright_timeout_error = import_playwright()
 
     with sync_playwright() as playwright:
-        need_login, html = read_html_without_login(
+        need_login, html, reason = read_html_without_login(
             playwright,
             args.browser,
             args.html_page,
@@ -551,6 +562,7 @@ def run(args: argparse.Namespace) -> str:
                 args.html_page,
                 args.auth_timeout,
                 playwright_timeout_error,
+                reason,
             )
 
     return html or ""
