@@ -1,5 +1,5 @@
 ﻿---
-description: 当用户需要读取网页、抓取登录后页面内容或分析最终渲染 HTML 时，调用 deep-read-web，并把 stdout 当作最终页面 HTML 上下文。优先使用精简 exe；只有本机没有系统 Edge/Chrome 或精简包无法运行时，再提示切换到带 Chromium 的 full 包。
+description: 当用户需要读取网页、抓取登录后页面内容或分析最终渲染 HTML 时，调用 deep-read-web，并把 stdout 当作最终页面 HTML 上下文。优先使用本地 exe；如果用户只有 skill 且没有 Python，则优先提示运行 skill 内的 scripts/install_binary.ps1，默认下载 small 包，不够再升级 full 包。
 alwaysApply: false
 ---
 
@@ -16,16 +16,16 @@ alwaysApply: false
 
 ### 1. 优先 exe
 
-如果仓库中存在：
+如果 skill 目录中存在：
 
 ```text
-skills/deep-read-web/bin/deep_read.exe
+bin/deep_read.exe
 ```
 
 优先执行：
 
 ```bash
-skills/deep-read-web/bin/deep_read.exe --HTML_PAGE "<url>"
+bin/deep_read.exe --HTML_PAGE "<url>"
 ```
 
 ### 2. 回退 Python
@@ -33,31 +33,34 @@ skills/deep-read-web/bin/deep_read.exe --HTML_PAGE "<url>"
 如果 exe 不存在，则执行：
 
 ```bash
-py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+py -3 scripts/deep_read.py --HTML_PAGE "<url>"
 ```
 
 如果 `py -3` 不可用，再尝试：
 
 ```bash
-python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+python scripts/deep_read.py --HTML_PAGE "<url>"
 ```
 
-## small / full 原则
+## 没有 Python 时的处理
 
-- 默认优先 small 思路，不主动要求下载 Chromium / Firefox
-- 如果本机已有 Edge/Chrome，small 包通常足够
-- 只有在 small 包提示缺少 Chromium 回退浏览器时，才提示下载 full 包
+如果用户只有 skill、没有 Python、也没有 exe：
 
-建议给用户的按需下载命令：
+先提示运行：
 
 ```powershell
-.\tools\install_release_binary.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 ```
 
-或显式下载 full：
+安装脚本默认逻辑：
+
+- 有系统 Edge/Chrome：下载 small
+- 没有系统 Edge/Chrome：下载 full
+
+如果 small 包运行失败且提示缺少 Chromium 回退浏览器，再提示：
 
 ```powershell
-.\tools\install_release_binary.ps1 -Flavor full
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
 ```
 
 ## 参数规则
@@ -73,9 +76,3 @@ python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
 - 把 `stderr` 视为状态提示或错误信息
 - 如果脚本提示需要登录，让用户直接在浏览器窗口中完成登录
 - 不要求用户把密码、cookie、token、验证码等敏感信息发到聊天中
-
-## 环境缺失时的处理
-
-- 没有 exe 且没有 Python：优先建议安装发布版
-- 源码模式缺少 Playwright：提示用户参考 README 安装依赖
-- 精简包缺少 Chromium 回退浏览器：提示安装 full 包，不默认要求 Firefox

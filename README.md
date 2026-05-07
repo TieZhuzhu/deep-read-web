@@ -4,73 +4,24 @@
 
 这个项目把“网页深度读取”做成一个可复用能力，供 Codex、Claude Code、Cursor 等 Agent 场景使用。
 
-## 当前设计结论
+## 当前定位
 
-当前发布策略已经调整为：
+本项目支持两种使用方式：
 
-- **small 包**：最小下载，优先使用系统 Edge/Chrome，不内置 Chromium
-- **full 包**：按需下载，内置 Playwright Chromium 回退浏览器
-- **默认推荐 small**：Windows 机器通常已经有 Edge 或 Chrome，不必为大多数用户预装 Chromium / Firefox
-- **Firefox 不做发布版默认依赖**：只有源码模式且用户显式需要时才安装
+1. **只安装 skill**
+   - 这是主路径
+   - 不要求用户完整 clone 仓库
+   - 无 Python 用户应优先使用二进制发布物
 
-这意味着：
+2. **完整仓库开发/调试**
+   - 适合开发、构建、验证、发布
+   - 可以使用 `tools/` 下的辅助脚本
 
-1. 能用系统浏览器时，尽量走最小下载
-2. 只有本机没有可用 Chromium 系浏览器时，再下载 full 包
-3. Skill 本身保持精简，不把大体积浏览器运行时直接塞进 skill 仓库
+## 当前发布策略
 
-## 核心能力
+采用双发布模型：
 
-- 公开页面无头读取
-- 登录页自动切换到可视浏览器，等待用户手动登录
-- 登录后允许重定向
-- 自动选择目标站点范围内的最佳内容页
-- 输出最终完整 HTML 到 `stdout`
-
-## 能力边界
-
-- 当前优先支持 Windows
-- 核心实现语言仍然是 Python
-- Python 运行时第三方依赖仅使用 `playwright`
-- 默认浏览器策略为：`auto -> msedge -> chrome -> chromium`
-- `firefox` 仅在显式指定 `--browser firefox` 时启用
-- 发布版默认不内置 Firefox
-
-## 仓库结构
-
-```text
-deep-read-web/
-  README.md
-  docs/
-    implementation-plan.md
-  .codex-plugin/
-    plugin.json
-  .cursor/
-    rules/
-      deep-read-web.mdc
-  .github/
-    workflows/
-      ci.yml
-      release.yml
-  skills/
-    deep-read-web/
-      SKILL.md
-      bin/
-        README.md
-        deep_read.exe                 # 本地构建或发布版安装后生成，不提交
-      scripts/
-        deep_read.py
-  tools/
-    build_windows.ps1
-    install_release_binary.ps1
-    run_deep_read.ps1
-    setup_windows.ps1
-    verify.ps1
-```
-
-## 两类发布物
-
-### 1. small 包（默认）
+### small（默认）
 
 资产名：
 
@@ -82,16 +33,10 @@ deep_read-windows-x64.zip
 
 - 最小下载
 - 不内置 Chromium
-- 优先使用系统 `msedge` / `chrome`
-- 最适合大多数 Windows 用户
+- 优先使用系统 Edge / Chrome
+- 适合大多数 Windows 用户
 
-适用场景：
-
-- Windows 已安装 Edge 或 Chrome
-- 希望下载体积尽量小
-- 愿意把浏览器依赖交给系统环境
-
-### 2. full 包（按需）
+### full（按需）
 
 资产名：
 
@@ -101,87 +46,29 @@ deep_read-windows-x64-with-chromium.zip
 
 特点：
 
-- 下载更大
-- 内置 Playwright Chromium 回退浏览器
-- 没有系统 Edge / Chrome 时也能运行
+- 内置 Playwright Chromium
+- 适合没有系统 Edge / Chrome 的环境
+- 只在 small 不够用时再下载
 
-适用场景：
+## 运行逻辑
 
-- 极简系统
-- 没有 Edge/Chrome
-- 需要更强的“开箱即用”保证
+统一运行优先级：
 
-## 最小运行方案
+1. 若存在 `bin/deep_read.exe`，优先运行 exe
+2. 若没有 exe，再回退 Python 源码模式
+3. 若没有 Python，也没有 exe，则先安装发布版
 
-这是当前推荐的最小运行策略：
+默认浏览器策略：
 
-1. Skill 保持精简
-2. 默认只安装 small 包
-3. 运行时优先用系统 Edge / Chrome
-4. 如果 small 包启动失败且提示缺少 Chromium 回退浏览器，再安装 full 包
-
-也就是：
-
-- **先最小下载**
-- **不够再按需升级**
-
-## 安装方式
-
-### 1. 无 Python 用户：优先安装发布版
-
-默认自动判断：
-
-```powershell
-.\tools\install_release_binary.ps1
+```text
+auto -> msedge -> chrome -> chromium
 ```
 
-脚本会按下面的策略选择下载哪个包：
+说明：
 
-- 如果检测到系统 Edge/Chrome：下载 **small**
-- 如果没检测到：下载 **full**
-
-也可以手动指定：
-
-```powershell
-.\tools\install_release_binary.ps1 -Flavor small
-.\tools\install_release_binary.ps1 -Flavor full
-```
-
-### 2. 开发 / 调试用户：源码模式
-
-检查 Python：
-
-```powershell
-py -3 --version
-```
-
-安装依赖：
-
-```powershell
-.\tools\setup_windows.ps1
-```
-
-如果你需要源码模式的 Chromium 运行时：
-
-```powershell
-.\tools\setup_windows.ps1 -InstallChromium
-```
-
-如果你显式需要 Firefox 运行时：
-
-```powershell
-.\tools\setup_windows.ps1 -InstallFirefox
-```
-
-> 注意：Windows 常规场景下，不需要默认安装 Chromium / Firefox。`setup_windows.ps1` 默认只安装 Python 包，不默认下载浏览器运行时；只有你显式传 `-InstallChromium` 或 `-InstallFirefox` 时才下载。
-
-## 运行优先级
-
-统一规则：
-
-1. 若存在 `skills/deep-read-web/bin/deep_read.exe`，优先使用 exe
-2. 若 exe 不存在，则回退 Python 源码模式
-3. 若两者都不可用，则提示用户安装发布版或 Python
+- Windows 环境默认不要求安装 Chromium / Firefox
+- 只有系统没有可用 Edge/Chrome 时，才需要 full 包
+- Firefox 不作为默认发布依赖，仅在源码模式且用户显式需要时使用
 
 ## CLI 约定
 
@@ -209,17 +96,130 @@ skills\deep-read-web\bin\deep_read.exe --HTML_PAGE "<url>" [--browser ...] [--au
 auto | msedge | msedge-dev | msedge-beta | chrome | chrome-dev | chrome-beta | chromium | firefox
 ```
 
-退出码约定：
+退出码：
 
 - `0`：成功
-- `1`：依赖缺失、浏览器启动失败、读取失败、登录超时等运行时错误
-- `2`：命令行参数错误
+- `1`：运行时错误、依赖缺失、浏览器启动失败、登录超时
+- `2`：参数错误
 - `130`：用户中断
 
 输出约定：
 
 - 成功时只把最终 HTML 输出到 `stdout`
 - 状态和错误输出到 `stderr`
+
+## 只安装 skill 的使用流程
+
+### A. 有 Python 的用户
+
+1. 安装 skill
+2. 直接运行：
+
+```powershell
+py -3 scripts\deep_read.py --HTML_PAGE "https://example.com"
+```
+
+3. 如果缺少 Playwright：
+
+```powershell
+py -3 -m pip install playwright
+```
+
+4. 如果之后仍提示缺少 Chromium 回退浏览器，再按需安装：
+
+```powershell
+py -3 -m playwright install chromium
+```
+
+5. 只有显式需要 Firefox 时，再安装：
+
+```powershell
+py -3 -m playwright install firefox
+```
+
+### B. 没有 Python 的用户
+
+这是主路径。
+
+1. 安装 skill
+2. 先运行 skill 内自带的无 Python 安装脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
+```
+
+3. 该脚本会自动判断：
+   - 有系统 Edge/Chrome：下载 **small**
+   - 没有系统 Edge/Chrome：下载 **full**
+
+4. 安装完成后，运行：
+
+```powershell
+bin\deep_read.exe --HTML_PAGE "https://example.com"
+```
+
+5. 如果 small 包运行时报缺少 Chromium 回退浏览器，则手动升级到 full：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
+```
+
+## 完整仓库模式
+
+完整仓库模式主要用于开发与发布。
+
+### 常用脚本
+
+安装源码依赖：
+
+```powershell
+.\tools\setup_windows.ps1
+```
+
+按需安装 Chromium：
+
+```powershell
+.\tools\setup_windows.ps1 -InstallChromium
+```
+
+按需安装 Firefox：
+
+```powershell
+.\tools\setup_windows.ps1 -InstallFirefox
+```
+
+下载发布版到 skill bin 目录：
+
+```powershell
+.\tools\install_release_binary.ps1
+```
+
+运行：
+
+```powershell
+.\tools\run_deep_read.ps1 -HtmlPage "https://example.com"
+```
+
+验证：
+
+```powershell
+.\tools\verify.ps1
+.\tools\verify.ps1 -RunNetworkSmoke
+.\tools\verify.ps1 -UseBinary -RunNetworkSmoke
+.\tools\verify.ps1 -UseBinary -RunNetworkSmoke -Browser chromium
+```
+
+构建 small：
+
+```powershell
+.\tools\build_windows.ps1 -Flavor small
+```
+
+构建 full：
+
+```powershell
+.\tools\build_windows.ps1 -Flavor full
+```
 
 ## 页面读取与登录行为
 
@@ -250,125 +250,65 @@ auto | msedge | msedge-dev | msedge-beta | chrome | chrome-dev | chrome-beta | c
 - 最终页必须仍属于目标站点 host 范围
 - 最终页不能继续像登录页
 
-## 常用命令
+## 仓库结构
 
-### 运行
-
-```powershell
-.\tools\run_deep_read.ps1 -HtmlPage "https://example.com"
+```text
+deep-read-web/
+  README.md
+  docs/
+    implementation-plan.md
+  .codex-plugin/
+    plugin.json
+  .cursor/
+    rules/
+      deep-read-web.mdc
+  .github/
+    workflows/
+      ci.yml
+      release.yml
+  skills/
+    deep-read-web/
+      SKILL.md
+      bin/
+        README.md
+        deep_read.exe
+      scripts/
+        deep_read.py
+        install_binary.ps1
+  tools/
+    build_windows.ps1
+    install_release_binary.ps1
+    run_deep_read.ps1
+    setup_windows.ps1
+    verify.ps1
 ```
-
-指定浏览器：
-
-```powershell
-.\tools\run_deep_read.ps1 -HtmlPage "https://example.com" -Browser firefox
-```
-
-自定义超时：
-
-```powershell
-.\tools\run_deep_read.ps1 -HtmlPage "https://example.com" -AuthTimeout 90
-```
-
-### 本地验证
-
-源码模式：
-
-```powershell
-.\tools\verify.ps1
-.\tools\verify.ps1 -RunNetworkSmoke
-```
-
-二进制模式：
-
-```powershell
-.\tools\verify.ps1 -UseBinary
-.\tools\verify.ps1 -UseBinary -RunNetworkSmoke
-```
-
-如果你想验证 full 包里的 Chromium 回退浏览器：
-
-```powershell
-.\tools\verify.ps1 -UseBinary -RunNetworkSmoke -Browser chromium
-```
-
-### 本地构建
-
-构建 small 包：
-
-```powershell
-.\tools\build_windows.ps1 -Flavor small
-```
-
-构建 full 包：
-
-```powershell
-.\tools\build_windows.ps1 -Flavor full
-```
-
-构建结果：
-
-- `skills/deep-read-web/bin/deep_read.exe`
-- `dist/deep_read-windows-x64.zip`
-- `dist/deep_read-windows-x64-with-chromium.zip`
 
 ## 三端接入说明
 
 ### Codex
 
-仓库提供：
-
-- `.codex-plugin/plugin.json`
-- `skills/deep-read-web/SKILL.md`
-
-建议调用顺序：
-
-1. 有 exe 就优先用 exe
-2. 没 exe 再回退 Python
-3. 没 Python 时优先提示用户安装发布版
-4. 默认优先 small 包，只有缺浏览器时再建议 full 包
+- 优先使用 `bin/deep_read.exe`
+- 没有 exe 时再回退 Python
+- 没有 Python 时，优先运行 skill 内的 `scripts/install_binary.ps1`
+- 默认 small，不够再 full
 
 ### Claude Code
 
-可直接复用：
-
-```text
-skills/deep-read-web/
-```
-
-安装到：
-
-```text
-~/.claude/skills/deep-read-web/
-```
-
-或项目级：
-
-```text
-.claude/skills/deep-read-web/
-```
-
-推荐规则同样是：
+同样建议：
 
 - 优先 exe
 - 回退 Python
-- 先 small，必要时 full
+- 没 Python 时优先运行 skill 内安装脚本
+- 默认 small，不够再 full
 
 ### Cursor
 
-仓库提供：
+Cursor 规则应遵循同样原则：
 
-```text
-.cursor/rules/deep-read-web.mdc
-```
-
-该规则会指导 Cursor：
-
-- 遇到网页深读需求时调用 deep-read-web
-- 优先使用 exe
-- 若没有 exe 再回退 Python
-- 缺环境时优先指向 small 包安装
-- 只有 small 包不满足时再切换 full 包
+- 优先 exe
+- 回退 Python
+- 缺环境时优先提示运行 skill 内安装脚本
+- 默认 small，必要时 full
 
 ## GitHub Actions
 
@@ -391,39 +331,35 @@ skills/deep-read-web/
 
 ## 常见失败场景
 
-### 1. small 包启动失败，提示缺少 Chromium 回退浏览器
-
-这说明：
-
-- 本机没有可用系统 Edge/Chrome
-- 当前又在使用不内置 Chromium 的 small 包
+### 1. 没有 Python，也没有 exe
 
 处理：
 
 ```powershell
-.\tools\install_release_binary.ps1 -Flavor full
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 ```
 
-### 2. 源码模式缺少 Playwright
+### 2. small 包启动失败，提示缺少 Chromium 回退浏览器
 
 处理：
 
 ```powershell
-.\tools\setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
 ```
 
-如果仍缺少 Chromium 回退浏览器，再执行：
-
-```powershell
-.\tools\setup_windows.ps1 -InstallChromium
-```
-
-### 3. 登录超时
+### 3. 源码模式缺少 Playwright
 
 处理：
 
-- 确认登录后确实进入内容页
-- 适当增大 `--auth-timeout` 或 `-AuthTimeout`
+```powershell
+py -3 -m pip install playwright
+```
+
+若仍缺 Chromium 回退浏览器，再补：
+
+```powershell
+py -3 -m playwright install chromium
+```
 
 ### 4. 显式指定 Firefox 失败
 
@@ -431,12 +367,3 @@ skills/deep-read-web/
 
 - 发布版默认不内置 Firefox
 - 若确实需要 Firefox，请走源码模式并安装 Playwright Firefox
-
-## 后续计划
-
-下一阶段仍可继续优化：
-
-- macOS / Linux 发布
-- 更细粒度的浏览器按需下载机制
-- 自动升级 small -> full 的辅助脚本
-- 更完整的真实登录页验收

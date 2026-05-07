@@ -37,6 +37,23 @@ function Invoke-Python {
     }
 }
 
+function Get-PlaywrightEmbeddedBrowserPath {
+    param([string[]]$PythonCommand)
+
+    $runner = $PythonCommand[0]
+    $prefix = @()
+    if ($PythonCommand.Length -gt 1) {
+        $prefix = $PythonCommand[1..($PythonCommand.Length - 1)]
+    }
+
+    $path = & $runner @prefix "-c" "import pathlib, playwright; print((pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / '.local-browsers'))"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to resolve Playwright embedded browser path."
+    }
+
+    return ($path | Out-String).Trim()
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $scriptPath = Join-Path $repoRoot "skills\deep-read-web\scripts\deep_read.py"
 $binDir = Join-Path $repoRoot "skills\deep-read-web\bin"
@@ -71,6 +88,11 @@ if ($shouldBundleChromium) {
 }
 else {
     Remove-Item Env:PLAYWRIGHT_BROWSERS_PATH -ErrorAction SilentlyContinue
+    $embeddedBrowserPath = Get-PlaywrightEmbeddedBrowserPath -PythonCommand $pythonCommand
+    if ($embeddedBrowserPath -and (Test-Path $embeddedBrowserPath)) {
+        Write-Host "Removing embedded Playwright browsers for small build..." -ForegroundColor Cyan
+        Remove-Item -LiteralPath $embeddedBrowserPath -Recurse -Force
+    }
 }
 
 if (Test-Path $exePath) {
