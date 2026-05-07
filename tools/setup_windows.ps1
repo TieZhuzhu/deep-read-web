@@ -5,15 +5,17 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Get-PythonCommand {
-    if (Get-Command py -ErrorAction SilentlyContinue) {
-        return @("py", "-3")
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py -and $py.Source) {
+        return @($py.Source, "-3")
     }
 
-    if (Get-Command python -ErrorAction SilentlyContinue) {
-        return @("python")
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python -and $python.Source) {
+        return @($python.Source)
     }
 
-    throw "Python not found. Please install Python 3 first."
+    return $null
 }
 
 function Invoke-PythonModule {
@@ -29,9 +31,26 @@ function Invoke-PythonModule {
     }
 
     & $runner @prefix @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $runner $($prefix + $Arguments -join ' ')"
+    }
 }
 
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$binaryPath = Join-Path $repoRoot "skills\deep-read-web\bin\deep_read.exe"
 $pythonCommand = Get-PythonCommand
+
+if (-not $pythonCommand) {
+    if (Test-Path $binaryPath) {
+        Write-Host "已找到 deep_read.exe，当前环境可直接使用二进制模式，无需安装 Python 依赖。" -ForegroundColor Green
+        if ($InstallFirefox) {
+            Write-Warning "无 Python 模式下无法通过本脚本安装 Playwright Firefox。请改用源码模式，或使用已打包的发布版。"
+        }
+        exit 0
+    }
+
+    throw "未找到 Python 3，且本地也没有 deep_read.exe。请先运行 .\\tools\\install_release_binary.ps1 下载发布版，或安装 Python 3 后再执行本脚本。"
+}
 
 Write-Host "Using Python command: $($pythonCommand -join ' ')" -ForegroundColor Cyan
 Invoke-PythonModule -PythonCommand $pythonCommand -Arguments @("-m", "pip", "install", "playwright")

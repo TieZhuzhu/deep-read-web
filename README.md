@@ -1,274 +1,411 @@
-# deep-read-web
+﻿# deep-read-web
 
-利用 Playwright 读取公开网页或需要手动登录后才能访问的网页，并输出最终页面的完整 HTML。
+使用 Playwright 读取公开网页或登录后网页，并把最终页面的完整 HTML 输出到标准输出。
 
-首版目标是先把“可用核心”交付出来：
+这个项目的目标是把“网页深度读取”做成一个可复用的 Skill / Plugin / IDE 规则能力，供 Codex、Claude Code、Cursor 等 Agent 场景使用。
 
-- 公开页面直接读取，不打开窗口。
-- 登录页面自动切换到可见浏览器，等待用户手动鉴权。
-- 鉴权成功后输出最终页面 HTML。
-- 同时兼容 Codex、Claude Code、Cursor 三种使用方式。
+## 当前状态
 
-## 当前能力边界
+当前仓库已经完成首版核心能力：
 
-- 首版优先支持 Windows。
-- 脚本运行时依赖 Python 和 `playwright`。
-- 默认浏览器策略为 `auto -> msedge -> chrome -> chromium`。
-- `firefox` 仅在显式指定 `--browser firefox` 时启用。
-- 暂不提供无 Python 的可执行发布物；这是第二阶段工作。
+- 支持公开页面无头读取
+- 支持疑似登录页切换到可视浏览器，等待用户手动登录
+- 支持登录后重定向，再自动选择目标站点范围内的最佳内容页
+- 支持通过 Skill / Codex Plugin / Cursor rule 接入
+- 支持 Windows 二进制发布路径：**优先 `deep_read.exe`，回退 Python 源码模式**
+
+## 能力边界
+
+- 当前优先支持 Windows
+- 核心实现语言仍然是 Python
+- 运行时第三方 Python 依赖仅使用 `playwright`
+- 默认浏览器策略为：`auto -> msedge -> chrome -> chromium`
+- `firefox` 仅在显式指定 `--browser firefox` 时启用
+- 无 Python 体验通过 **Windows 发布版 `deep_read.exe`** 提供
 
 ## 仓库结构
 
 ```text
 deep-read-web/
+  README.md
+  docs/
+    implementation-plan.md
   .codex-plugin/
     plugin.json
   .cursor/
     rules/
       deep-read-web.mdc
-  docs/
-    implementation-plan.md
   skills/
     deep-read-web/
       SKILL.md
+      bin/
+        README.md
+        deep_read.exe              # 发布物，默认不提交到仓库
       scripts/
         deep_read.py
+  tools/
+    build_windows.ps1
+    install_release_binary.ps1
+    run_deep_read.ps1
+    setup_windows.ps1
+    verify.ps1
 ```
 
-## 运行前准备
+## 运行模式
 
-### 1. 安装 Python
+项目现在有两种运行模式。
 
-Windows 推荐直接验证：
+### 1. 二进制模式（无 Python 用户优先）
+
+如果存在下面这个文件：
+
+```text
+skills/deep-read-web/bin/deep_read.exe
+```
+
+则：
+
+- `tools/run_deep_read.ps1` 会优先调用它
+- Skill 文档和 Cursor 规则也应优先走 exe
+- 用户本机**不需要安装 Python**
+
+如果你已经在 GitHub Release 中发布了二进制包，可以直接下载到本地：
 
 ```powershell
-py -3 --version
+.\tools\install_release_binary.ps1
 ```
 
-如果没有 `py`，可以改用：
+这会从默认仓库 `TieZhuzhu/deep-read-web` 的最新 Release 下载：
 
-```powershell
-python --version
+- `deep_read-windows-x64.zip`
+
+并解压安装到：
+
+```text
+skills/deep-read-web/bin/deep_read.exe
 ```
 
-首版仍然需要 Python，因为当前只交付源码脚本，没有提供 `deep_read.exe` 之类的打包产物。
+> 如果你要安装指定 tag 的发布物，也可以传 `-Tag`。
 
-### 2. 安装 Playwright
+### 2. 源码模式（开发 / 调试 / 回退）
 
-安装 Python 包：
-
-```powershell
-py -3 -m pip install playwright
-```
-
-安装 Playwright 浏览器运行时：
-
-```powershell
-py -3 -m playwright install chromium firefox
-```
-
-说明：
-
-- 使用系统 Edge 或 Chrome 时，通常不依赖 Playwright 下载品牌浏览器本体。
-- 但 `chromium` 回退路径和显式 `firefox` 路径仍建议提前执行安装命令。
-
-## 命令行使用
-
-基础命令：
+当 `deep_read.exe` 不存在时，回退到 Python 源码模式：
 
 ```powershell
 py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "https://example.com"
 ```
 
-显式指定浏览器：
+如果 `py -3` 不可用，再尝试：
 
 ```powershell
-py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "https://example.com" --browser firefox
+python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "https://example.com"
 ```
 
-自定义登录超时：
+## CLI 约定
+
+统一入口：
 
 ```powershell
-py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "https://example.com" --auth-timeout 90
+py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>" [--browser ...] [--auth-timeout ...]
 ```
 
-支持的浏览器参数：
+或二进制入口：
+
+```powershell
+skills\deep-read-web\bin\deep_read.exe --HTML_PAGE "<url>" [--browser ...] [--auth-timeout ...]
+```
+
+参数约定：
+
+- `--HTML_PAGE`：必填，必须是合法 `http/https` URL
+- `--browser`：可选，默认 `auto`
+- `--auth-timeout`：可选，默认 `60`
+
+支持的浏览器值：
 
 ```text
 auto | msedge | msedge-dev | msedge-beta | chrome | chrome-dev | chrome-beta | chromium | firefox
 ```
 
-脚本行为：
-
-1. 先用无头浏览器读取页面。
-2. 如果页面可直接访问，则直接输出完整 HTML 到标准输出。
-3. 如果页面像登录页，则打开可见浏览器窗口等待用户手动登录。
-4. 登录成功后输出最终页面 HTML。
-5. 超时或失败时输出错误到标准错误，并返回非 0 退出码。
-
 退出码约定：
 
-- `0`：成功。
-- `1`：依赖缺失、浏览器启动失败、鉴权超时或页面读取失败。
-- `2`：命令行参数错误。
-- `130`：用户中断执行。
+- `0`：成功
+- `1`：依赖缺失、浏览器启动失败、读取失败、登录超时等运行时错误
+- `2`：命令行参数错误
+- `130`：用户中断
 
-## Windows 辅助脚本
+输出约定：
 
-为了减少手工输入，仓库提供了两个 PowerShell 辅助脚本：
+- 成功时：**只把最终 HTML 输出到 `stdout`**
+- 状态信息与错误信息：输出到 `stderr`
 
-### 安装依赖
+## 页面读取与登录行为
+
+脚本的行为是固定的两阶段流程：
+
+1. 先用无头浏览器访问目标页
+2. 若页面像正常内容页，直接输出 HTML，不弹窗口
+3. 若页面像登录页 / 鉴权页，则切换为可视浏览器
+4. 等待用户手动完成登录
+5. 登录成功后，输出当前最合适的内容页 HTML
+6. 超时则返回错误
+
+### 登录页判断
+
+当前使用启发式规则，不做站点定制：
+
+- URL 是否包含 `login` / `signin` / `auth` / `sso` / `oauth` / `登录` 等关键词
+- 页面标题是否包含登录关键词
+- 页面中是否存在 `input[type=password]`
+- 是否存在账号类输入框
+
+### 登录后重定向处理
+
+登录成功**不要求最终 URL 必须与原始 URL 完全一致**。
+
+当前规则是：
+
+- 最终页必须仍是 `http/https`
+- 最终页不能仍然像登录页
+- 最终页必须属于目标站点 host 范围内
+  - 同 host
+  - 或父子域名关系
+- 会在多个页面中优先选择最像目标内容页的页面
+
+这保证了下面这类场景可以正常工作：
+
+- 原始页：`https://docs.example.com/a`
+- 登录后：`https://docs.example.com/a?ticket=...`
+
+或者：
+
+- 原始页：`https://example.com/report/1`
+- 登录后：`https://reader.example.com/report/1`
+
+## 安装与准备
+
+### 源码模式：安装 Python 与 Playwright
+
+检查 Python：
+
+```powershell
+py -3 --version
+```
+
+或：
+
+```powershell
+python --version
+```
+
+安装依赖：
 
 ```powershell
 .\tools\setup_windows.ps1
 ```
 
-如果你还想顺手安装 Playwright Firefox 运行时：
+如需额外安装 Playwright Firefox 运行时：
 
 ```powershell
 .\tools\setup_windows.ps1 -InstallFirefox
 ```
 
-### 运行读取脚本
+### 二进制模式：下载发布版
+
+如果你不想安装 Python：
+
+```powershell
+.\tools\install_release_binary.ps1
+```
+
+下载完成后即可运行：
 
 ```powershell
 .\tools\run_deep_read.ps1 -HtmlPage "https://example.com"
 ```
 
-指定浏览器与登录超时：
+## 常用命令
+
+### 读取页面
 
 ```powershell
-.\tools\run_deep_read.ps1 -HtmlPage "https://example.com" -Browser firefox -AuthTimeout 90
+.\tools\run_deep_read.ps1 -HtmlPage "https://example.com"
 ```
 
-### 运行仓库验证
+指定浏览器：
+
+```powershell
+.\tools\run_deep_read.ps1 -HtmlPage "https://example.com" -Browser firefox
+```
+
+自定义登录超时：
+
+```powershell
+.\tools\run_deep_read.ps1 -HtmlPage "https://example.com" -AuthTimeout 90
+```
+
+### 本地验证
+
+源码模式验证：
 
 ```powershell
 .\tools\verify.ps1
-```
-
-如果你已经安装好了 Playwright，希望顺带跑一次公开页面的真实 smoke test：
-
-```powershell
 .\tools\verify.ps1 -RunNetworkSmoke
 ```
 
-## Codex 使用方式
-
-本仓库提供了 `.codex-plugin/plugin.json` 和 `skills/deep-read-web/SKILL.md`。
-
-Skill 约定：
-
-- 当用户要求读取某个网页 HTML，或分析一个可能需要登录的页面时，Agent 应调用：
+二进制模式验证：
 
 ```powershell
-py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+.\tools\verify.ps1 -UseBinary
+.\tools\verify.ps1 -UseBinary -RunNetworkSmoke
 ```
 
-- 如果 `py -3` 不可用，再尝试：
+### 构建 Windows 发布版
+
+本地构建：
 
 ```powershell
-python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+.\tools\build_windows.ps1
 ```
 
-- 如果 Python 不可用，则明确告知当前首版需要 Python 环境。
+如果你希望构建时把 Playwright Chromium 一并打包进发布物：
 
-## Claude Code 使用方式
+```powershell
+.\tools\build_windows.ps1 -BundleChromium
+```
 
-Claude Code 的 Skill 目录通常是：
+构建结果：
 
-- 个人级：`~/.claude/skills/`
-- 项目级：`.claude/skills/`
+- 可执行文件：`skills/deep-read-web/bin/deep_read.exe`
+- 压缩包：`dist/deep_read-windows-x64.zip`
 
-本仓库可以直接复用 `skills/deep-read-web/` 目录内容。常见做法是把该目录复制到：
+## 三端接入说明
+
+### Codex
+
+仓库已提供：
+
+- `.codex-plugin/plugin.json`
+- `skills/deep-read-web/SKILL.md`
+
+建议调用优先级：
+
+1. 若存在 `skills/deep-read-web/bin/deep_read.exe`，优先调用 exe
+2. 否则调用 Python 脚本
+3. 若两者都不可用，明确提示用户缺少运行环境
+
+### Claude Code
+
+可直接复用：
+
+```text
+skills/deep-read-web/
+```
+
+安装到：
 
 ```text
 ~/.claude/skills/deep-read-web/
 ```
 
-或项目内：
+或项目级：
 
 ```text
 .claude/skills/deep-read-web/
 ```
 
-触发方式仍是自然语言，不需要额外的命令前缀。
+同样建议：**优先 exe，回退 Python**。
 
-## Cursor 使用方式
+### Cursor
 
-本仓库提供了 `.cursor/rules/deep-read-web.mdc`。
+仓库已提供：
 
-定位：
+```text
+.cursor/rules/deep-read-web.mdc
+```
 
-- 这是 Cursor Project Rule 兼容层。
-- 它不是原生的 `SKILL.md` 安装体验替代品。
-- 它的职责是告诉 Cursor Agent 在什么场景下运行 `deep_read.py`。
+该规则的职责是：
 
-如果你在 Cursor 中使用本仓库，确保项目规则已启用，并让 Agent 在读取网页时使用该规则文件中的命令格式。
+- 告诉 Cursor 在什么情况下调用 `deep-read-web`
+- 优先消费 exe
+- 若没有 exe 再退回 Python 脚本
+- 将 `stdout` 作为最终 HTML 上下文
+
+## GitHub Actions
+
+当前提供两个工作流：
+
+### 1. `ci`
+
+用于源码模式验证：
+
+- 安装 Python
+- 安装 Playwright
+- 运行 `tools/verify.ps1 -RunNetworkSmoke`
+
+### 2. `release-binary`
+
+用于构建 Windows 发布版：
+
+- 构建 `deep_read.exe`
+- 验证二进制可执行文件
+- 上传 `deep_read-windows-x64.zip` 构建产物
+- 在 tag 推送时创建 GitHub Release
 
 ## 常见失败场景
 
-### Python 不存在
+### 1. 没有 Python，也没有 exe
 
 表现：
 
-- `py -3` 或 `python` 无法执行。
+- `run_deep_read.ps1` 提示没有可用运行环境
 
 处理：
 
-- 先安装 Python。
-- 当前首版没有提供免 Python 的打包产物。
+- 运行 `install_release_binary.ps1` 下载发布版
+- 或安装 Python 后使用源码模式
 
-### Playwright 未安装
+### 2. 缺少 Playwright
 
 表现：
 
-- 脚本提示未检测到 `playwright`。
+- 源码模式下脚本提示未检测到 `playwright`
 
 处理：
 
 ```powershell
-py -3 -m pip install playwright
-py -3 -m playwright install chromium firefox
+.\tools\setup_windows.ps1
 ```
 
-### 页面需要登录但一直没有成功
+### 3. 登录超时
 
 表现：
 
-- 浏览器窗口已打开，但在超时时间内仍未检测到离开登录态。
+- 浏览器窗口已打开，但在超时时间内仍未检测到回到目标内容页
 
 处理：
 
-- 确认页面确实已经完成登录并跳转到内容页。
-- 如果站点登录流程较慢，可适当提高 `--auth-timeout`。
+- 确认站点已真正完成登录并跳转到内容页
+- 适当增大 `-AuthTimeout` 或 `--auth-timeout`
 
-### 指定浏览器无法启动
+### 4. 二进制模式下浏览器启动失败
 
 表现：
 
-- 脚本提示指定浏览器不可用或启动失败。
+- 没有系统 Edge / Chrome
+- 且当前发布版未包含所需浏览器运行时
 
 处理：
 
-- 检查该浏览器是否已安装。
-- 若使用 `firefox`，确认已经执行 `py -3 -m playwright install firefox`。
-- 如果只是想读取页面，可先回退到默认 `auto`。
+- 优先使用系统 Edge / Chrome
+- 或使用 `-BundleChromium` 构建自己的发布版
+- 或退回 Python 源码模式安装 Playwright 浏览器运行时
 
 ## 后续计划
 
-第二阶段预留项：
+下一阶段仍可继续增强：
 
-- 提供 Windows 单文件可执行产物。
-- 提供 GitHub Release 附件。
-- 在 Skill 中实现“优先可执行文件，回退 Python”的无 Python 体验。
-
-## CI
-
-仓库已提供 GitHub Actions 基础验证流程：
-
-- 在 Windows 环境安装 Python。
-- 安装 `playwright` 与浏览器运行时。
-- 执行 `tools/verify.ps1 -RunNetworkSmoke`。
-
-这能保证公开页面读取路径在持续集成里有基础回归保护。
+- 更完整的跨平台发布（macOS / Linux）
+- 可选 Firefox 打包发布
+- 更细粒度的 Release 安装脚本
+- 更完整的真实登录页回归验证
