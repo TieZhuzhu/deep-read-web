@@ -8,6 +8,23 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+function Get-GitHubHeaders {
+    $headers = @{
+        "User-Agent" = "deep-read-web-installer"
+    }
+
+    $token = $env:GITHUB_TOKEN
+    if (-not $token) {
+        $token = $env:GH_TOKEN
+    }
+
+    if ($token) {
+        $headers["Authorization"] = "Bearer $token"
+    }
+
+    return $headers
+}
+
 function Test-SystemChromiumBrowser {
     $candidates = @(
         (Join-Path $env:PROGRAMFILES "Microsoft\Edge\Application\msedge.exe"),
@@ -43,28 +60,40 @@ else {
     "deep_read-windows-x64.zip"
 }
 
-$releaseApi = if ($Tag) {
-    "https://api.github.com/repos/$Repo/releases/tags/$Tag"
+$downloadUrl = if ($Tag) {
+    "https://github.com/$Repo/releases/download/$Tag/$assetName"
 }
 else {
-    "https://api.github.com/repos/$Repo/releases/latest"
+    "https://github.com/$Repo/releases/latest/download/$assetName"
 }
-
-Write-Host "Fetching release metadata from $releaseApi" -ForegroundColor Cyan
-$release = Invoke-RestMethod -Uri $releaseApi -Headers @{ "User-Agent" = "deep-read-web-installer" }
-$asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
-
-if (-not $asset) {
-    throw "Release asset '$assetName' was not found in $Repo."
-}
+$headers = Get-GitHubHeaders
 
 $tempZip = Join-Path ([System.IO.Path]::GetTempPath()) ("deep-read-web-" + [System.Guid]::NewGuid().ToString("N") + ".zip")
 $tempExtractDir = Join-Path ([System.IO.Path]::GetTempPath()) ("deep-read-web-" + [System.Guid]::NewGuid().ToString("N"))
 
 try {
     Write-Host "Resolved flavor: $resolvedFlavor" -ForegroundColor Cyan
-    Write-Host "Downloading $assetName ..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip -Headers @{ "User-Agent" = "deep-read-web-installer" }
+    Write-Host "Downloading $assetName from $downloadUrl ..." -ForegroundColor Cyan
+
+    try {
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -Headers $headers
+    }
+    catch {
+        $message = $_.Exception.Message
+        if ($message -match "404") {
+            if ($Tag) {
+                throw "Release asset '$assetName' was not found for tag '$Tag' in $Repo."
+            }
+
+            throw "Latest release asset '$assetName' was not found in $Repo. Please confirm the GitHub Release has been published."
+        }
+
+        if ($message -match "403" -or $message -match "rate limit") {
+            throw "GitHub download was rate-limited. Set GITHUB_TOKEN or GH_TOKEN and retry."
+        }
+
+        throw
+    }
 
     New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null
     Expand-Archive -LiteralPath $tempZip -DestinationPath $tempExtractDir -Force

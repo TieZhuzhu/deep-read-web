@@ -30,6 +30,12 @@
 - 仓库级安装：`tools/install_release_binary.ps1`
 - 本地构建：`tools/build_windows.ps1 -Flavor small|full`
 
+补充说明：
+
+- `scripts/install_binary.ps1` 默认直接从 GitHub Release 资产下载
+- 需要固定版本时可使用 `-Tag <tag>`
+- 如果 GitHub 下载受限，可设置 `GITHUB_TOKEN` 或 `GH_TOKEN`
+
 说明：
 
 - 本目录只负责承载二进制运行文件

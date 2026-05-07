@@ -58,6 +58,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 
 - 有系统 Edge/Chrome：下载 **small**
 - 没有系统 Edge/Chrome：下载 **full**
+- 默认直接从 GitHub Release 资产下载，不依赖 GitHub API 的 latest metadata 配额
 
 安装完成后，再运行：
 
@@ -69,6 +70,12 @@ bin/deep_read.exe --HTML_PAGE "<url>"
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
+```
+
+如果需要指定某个发布 tag，也可以：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Tag v1.0.0
 ```
 
 ## 有 Python 路径
@@ -159,3 +166,4 @@ auto | msedge | msedge-dev | msedge-beta | chrome | chrome-dev | chrome-beta | c
 - 把 `stderr` 当作状态信息或错误信息
 - 不要让用户把密码、cookie、token、session 等敏感信息贴到聊天里
 - 如果需要登录，只让用户在浏览器窗口里自己完成鉴权
+- 如果 GitHub 下载受限，可设置 `GITHUB_TOKEN` 或 `GH_TOKEN` 后再运行安装脚本

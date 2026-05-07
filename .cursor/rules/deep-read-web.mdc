@@ -56,11 +56,18 @@ powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 
 - 有系统 Edge/Chrome：下载 small
 - 没有系统 Edge/Chrome：下载 full
+- 默认直接从 GitHub Release 资产下载，不依赖 GitHub API 的 latest metadata 配额
 
 如果 small 包运行失败且提示缺少 Chromium 回退浏览器，再提示：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
+```
+
+如果用户需要固定到某个发布版本，也可以提示：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Tag v1.0.0
 ```
 
 ## 参数规则
@@ -76,3 +83,4 @@ powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
 - 把 `stderr` 视为状态提示或错误信息
 - 如果脚本提示需要登录，让用户直接在浏览器窗口中完成登录
 - 不要求用户把密码、cookie、token、验证码等敏感信息发到聊天中
+- 如果 GitHub 下载受限，可建议用户设置 `GITHUB_TOKEN` 或 `GH_TOKEN` 后再运行安装脚本

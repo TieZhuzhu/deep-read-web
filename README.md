@@ -151,6 +151,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 3. 该脚本会自动判断：
    - 有系统 Edge/Chrome：下载 **small**
    - 没有系统 Edge/Chrome：下载 **full**
+   - 默认直接从 GitHub Release 资产下载，不依赖 GitHub API 的 latest metadata 配额
 
 4. 安装完成后，运行：
 
@@ -162,6 +163,12 @@ bin\deep_read.exe --HTML_PAGE "https://example.com"
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
+```
+
+6. 如果你要指定某个发布 tag，也可以：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Tag v1.0.0
 ```
 
 ## 完整仓库模式
@@ -338,6 +345,8 @@ Cursor 规则应遵循同样原则：
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 ```
+
+如果 GitHub 下载环境受限，可设置 `GITHUB_TOKEN` 或 `GH_TOKEN` 后重试。
 
 ### 2. small 包启动失败，提示缺少 Chromium 回退浏览器
 
