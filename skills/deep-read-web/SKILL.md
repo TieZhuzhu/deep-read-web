@@ -1,4 +1,4 @@
-﻿---
+---
 name: deep-read-web
 description: 使用 Playwright 读取公开网页或登录后网页的最终 HTML。适用于用户想要网页 HTML、需要在手动登录后继续读取页面，或希望分析登录后最终渲染内容的场景。优先使用本地 exe；如果只有 skill 且没有 Python，则优先运行 skill 自带的二进制安装脚本并默认下载精简 small 包，不够时再升级为 full 包。
 ---
