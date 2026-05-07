@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build-windows-binary:
     runs-on: windows-latest
@@ -41,4 +44,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME "dist\deep_read-windows-x64.zip" --title $env:GITHUB_REF_NAME --notes "Windows binary for deep-read-web."
+          $tag = $env:GITHUB_REF_NAME
+          $asset = "dist\deep_read-windows-x64.zip"
+          $title = $tag
+          $notes = "Windows binary for deep-read-web."
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $asset --clobber
+          }
+          else {
+            gh release create $tag $asset --title $title --notes $notes
+          }
