@@ -1,3 +1,7 @@
 .idea/
 __pycache__/
 skills/deep-read-web/.runtime/
+skills/deep-read-web/bin/*.exe
+build/
+dist/
+*.spec
