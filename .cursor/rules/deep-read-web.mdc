@@ -1,20 +1,67 @@
----
-description: Read public or login-protected web pages by running the deep_read.py Playwright script and using its stdout HTML as context.
+﻿---
+description: 当用户需要读取网页、抓取登录后页面内容或分析最终渲染 HTML 时，调用 deep-read-web，并把 stdout 当作最终页面 HTML 上下文。
 alwaysApply: false
 ---
 
 # Deep Read Web
 
-- Use this rule when the user asks to read a web page, extract the full HTML of a page, or analyze content behind a manual login flow.
-- Run the repository script at `skills/deep-read-web/scripts/deep_read.py`.
-- Prefer `py -3` on Windows. If `py -3` is unavailable, try `python`.
-- Use this command shape:
+在以下场景使用这个规则：
+
+- 用户要求读取某个网页的完整 HTML
+- 用户要求分析一个可能需要登录的页面
+- 页面会先跳到登录页，登录后再跳回目标内容页
+- 需要消费“最终页面 HTML”，而不是只看初始响应
+
+## 调用优先级
+
+### 1. 优先 exe
+
+如果仓库中存在：
+
+```text
+skills/deep-read-web/bin/deep_read.exe
+```
+
+优先执行：
+
+```bash
+skills/deep-read-web/bin/deep_read.exe --HTML_PAGE "<url>"
+```
+
+### 2. 回退 Python
+
+如果 exe 不存在，则执行：
 
 ```bash
 py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
 ```
 
-- Add `--browser <value>` only when the user explicitly asks for a browser.
-- Treat the script's `stdout` as the authoritative final-page HTML.
-- If the script reports that Python or Playwright is missing, explain the dependency and point the user to the repository README for setup.
-- Do not ask the user to paste cookies, passwords, or tokens into chat.
+如果 `py -3` 不可用，再尝试：
+
+```bash
+python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+```
+
+## 参数规则
+
+- 默认不额外传 `--browser`
+- 只有用户明确要求浏览器时，才加 `--browser <value>`
+- 默认不额外改 `--auth-timeout`
+- 只有用户明确要求更长/更短等待时间时，才加 `--auth-timeout <seconds>`
+
+## 结果消费规则
+
+- 把脚本 `stdout` 视为最终 HTML
+- 把脚本 `stderr` 视为状态提示或错误信息
+- 如果脚本提示需要登录，让用户直接在浏览器窗口中完成登录
+- 不要求用户把密码、cookie、token、验证码等敏感信息发到聊天中
+
+## 环境缺失时的处理
+
+- 如果没有 exe 且没有 Python，提示用户先运行：
+
+```powershell
+.\tools\install_release_binary.ps1
+```
+
+- 如果是源码模式缺少 Playwright，提示用户参考 README 安装依赖
