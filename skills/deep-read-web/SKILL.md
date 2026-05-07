@@ -1,6 +1,6 @@
 ﻿---
 name: deep-read-web
-description: 使用 Playwright 读取公开网页或登录后网页的最终 HTML。适用于用户想要网页 HTML、需要在手动登录后继续读取页面，或希望分析登录后最终渲染内容的场景。优先使用精简的 Windows 发布版；只有本机缺少系统 Edge/Chrome 或 small 包无法运行时，再切换到带 Chromium 的完整发布版。
+description: 使用 Playwright 读取公开网页或登录后网页的最终 HTML。适用于用户想要网页 HTML、需要在手动登录后继续读取页面，或希望分析登录后最终渲染内容的场景。优先使用本地 exe；如果只有 skill 且没有 Python，则优先运行 skill 自带的二进制安装脚本并默认下载精简 small 包，不够时再升级为 full 包。
 ---
 
 # Deep Read Web
@@ -14,62 +14,89 @@ description: 使用 Playwright 读取公开网页或登录后网页的最终 HTM
 - 页面会先跳转到登录页，登录后再重定向回目标内容页
 - 用户希望分析登录后的最终页面内容，而不是只看初始响应
 
-## 调用优先级
+## 运行优先级
 
-### 1. 优先使用本地 exe
+### 1. 优先 exe
 
 如果存在：
 
 ```text
-skills/deep-read-web/bin/deep_read.exe
+bin/deep_read.exe
 ```
 
 优先调用：
 
 ```bash
-skills/deep-read-web/bin/deep_read.exe --HTML_PAGE "<url>"
+bin/deep_read.exe --HTML_PAGE "<url>"
 ```
 
-### 2. exe 不存在时回退 Python 源码模式
+### 2. 没有 exe 时回退 Python
 
 Windows 下优先：
 
 ```bash
-py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+py -3 scripts/deep_read.py --HTML_PAGE "<url>"
 ```
 
 如果 `py -3` 不可用，再尝试：
 
 ```bash
-python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
+python scripts/deep_read.py --HTML_PAGE "<url>"
 ```
 
-## small / full 选择规则
+## 无 Python 主路径
 
-默认优先 small 思路：
+如果用户只有 skill、没有 Python、也没有 exe：
 
-1. Windows 通常已有 Edge 或 Chrome
-2. 因此默认优先使用最小下载的 small 包
-3. 只有本机没有可用系统浏览器，或 small 包提示缺少 Chromium 回退浏览器时，再建议 full 包
-
-如果用户没有 Python，也没有 exe：
-
-- 先建议：
+先运行 skill 自带安装脚本：
 
 ```powershell
-.\tools\install_release_binary.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1
 ```
 
-这个脚本会自动判断：
+该脚本会自动判断：
 
-- 有系统 Edge/Chrome：下载 small
-- 没有系统 Edge/Chrome：下载 full
+- 有系统 Edge/Chrome：下载 **small**
+- 没有系统 Edge/Chrome：下载 **full**
 
-也可手动指定：
+安装完成后，再运行：
+
+```bash
+bin/deep_read.exe --HTML_PAGE "<url>"
+```
+
+如果 small 包运行时报缺少 Chromium 回退浏览器，则升级为 full：
 
 ```powershell
-.\tools\install_release_binary.ps1 -Flavor small
-.\tools\install_release_binary.ps1 -Flavor full
+powershell -ExecutionPolicy Bypass -File scripts\install_binary.ps1 -Flavor full
+```
+
+## 有 Python 路径
+
+如果用户有 Python：
+
+1. 先尝试：
+
+```bash
+py -3 scripts/deep_read.py --HTML_PAGE "<url>"
+```
+
+2. 如果缺少 Playwright：
+
+```bash
+py -3 -m pip install playwright
+```
+
+3. 如果之后仍提示缺少 Chromium 回退浏览器，再补：
+
+```bash
+py -3 -m playwright install chromium
+```
+
+4. 只有用户明确需要 Firefox 时，再补：
+
+```bash
+py -3 -m playwright install firefox
 ```
 
 ## 可选参数
@@ -77,19 +104,19 @@ python skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>"
 指定浏览器：
 
 ```bash
-skills/deep-read-web/bin/deep_read.exe --HTML_PAGE "<url>" --browser firefox
+bin/deep_read.exe --HTML_PAGE "<url>" --browser firefox
 ```
 
 或：
 
 ```bash
-py -3 skills/deep-read-web/scripts/deep_read.py --HTML_PAGE "<url>" --browser firefox
+py -3 scripts/deep_read.py --HTML_PAGE "<url>" --browser firefox
 ```
 
 自定义登录超时：
 
 ```bash
-skills/deep-read-web/bin/deep_read.exe --HTML_PAGE "<url>" --auth-timeout 90
+bin/deep_read.exe --HTML_PAGE "<url>" --auth-timeout 90
 ```
 
 支持的浏览器值：
@@ -125,45 +152,6 @@ auto | msedge | msedge-dev | msedge-beta | chrome | chrome-dev | chrome-beta | c
 - 参数错误退出 `2`
 - 依赖缺失、浏览器启动失败、页面读取失败、登录超时退出 `1`
 - 用户中断退出 `130`
-
-## 依赖处理
-
-### 没有 Python
-
-优先建议安装发布版，不默认要求安装 Chromium / Firefox。
-
-### small 包失败时
-
-如果提示：
-
-- 缺少 Chromium 回退浏览器
-- 或当前精简版未内置 Chromium
-
-则建议安装 full 包：
-
-```powershell
-.\tools\install_release_binary.ps1 -Flavor full
-```
-
-### 源码模式缺少 Playwright
-
-提示：
-
-```bash
-py -3 -m pip install playwright
-```
-
-如果之后仍提示缺少 Chromium 回退浏览器，再补：
-
-```bash
-py -3 -m playwright install chromium
-```
-
-只有用户明确需要 Firefox 时，再提示：
-
-```bash
-py -3 -m playwright install firefox
-```
 
 ## 输出处理约定
 
