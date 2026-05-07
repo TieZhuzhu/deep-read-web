@@ -1,6 +1,7 @@
 param(
     [string]$Repo = "TieZhuzhu/deep-read-web",
-    [string]$AssetName = "deep_read-windows-x64.zip",
+    [ValidateSet("auto", "small", "full")]
+    [string]$Flavor = "auto",
     [string]$Tag
 )
 
@@ -11,6 +12,37 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $binDir = Join-Path $repoRoot "skills\deep-read-web\bin"
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 
+function Test-SystemChromiumBrowser {
+    $candidates = @(
+        (Join-Path $env:PROGRAMFILES "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path ${env:PROGRAMFILES(X86)} "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path $env:LOCALAPPDATA "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path $env:PROGRAMFILES "Google\Chrome\Application\chrome.exe"),
+        (Join-Path ${env:PROGRAMFILES(X86)} "Google\Chrome\Application\chrome.exe"),
+        (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe")
+    ) | Where-Object { $_ }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+$resolvedFlavor = $Flavor
+if ($resolvedFlavor -eq "auto") {
+    $resolvedFlavor = if (Test-SystemChromiumBrowser) { "small" } else { "full" }
+}
+
+$assetName = if ($resolvedFlavor -eq "full") {
+    "deep_read-windows-x64-with-chromium.zip"
+}
+else {
+    "deep_read-windows-x64.zip"
+}
+
 $releaseApi = if ($Tag) {
     "https://api.github.com/repos/$Repo/releases/tags/$Tag"
 }
@@ -20,17 +52,18 @@ else {
 
 Write-Host "Fetching release metadata from $releaseApi" -ForegroundColor Cyan
 $release = Invoke-RestMethod -Uri $releaseApi -Headers @{ "User-Agent" = "deep-read-web-installer" }
-$asset = $release.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
+$asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
 
 if (-not $asset) {
-    throw "Release asset '$AssetName' was not found in $Repo."
+    throw "Release asset '$assetName' was not found in $Repo."
 }
 
 $tempZip = Join-Path ([System.IO.Path]::GetTempPath()) ("deep-read-web-" + [System.Guid]::NewGuid().ToString("N") + ".zip")
 $tempExtractDir = Join-Path ([System.IO.Path]::GetTempPath()) ("deep-read-web-" + [System.Guid]::NewGuid().ToString("N"))
 
 try {
-    Write-Host "Downloading $AssetName ..." -ForegroundColor Cyan
+    Write-Host "Resolved flavor: $resolvedFlavor" -ForegroundColor Cyan
+    Write-Host "Downloading $assetName ..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip -Headers @{ "User-Agent" = "deep-read-web-installer" }
 
     New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null

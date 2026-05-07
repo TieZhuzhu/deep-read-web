@@ -25,18 +25,30 @@ jobs:
       - name: Build packaged executable
         shell: pwsh
         run: |
-          .\tools\build_windows.ps1 -BundleChromium
+          .\tools\build_windows.ps1 -Flavor small
 
-      - name: Verify packaged executable
+      - name: Verify small packaged executable
         shell: pwsh
         run: |
           .\tools\verify.ps1 -UseBinary -RunNetworkSmoke
 
-      - name: Upload build artifact
+      - name: Build full packaged executable
+        shell: pwsh
+        run: |
+          .\tools\build_windows.ps1 -Flavor full
+
+      - name: Verify full packaged executable
+        shell: pwsh
+        run: |
+          .\tools\verify.ps1 -UseBinary -RunNetworkSmoke -Browser chromium
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deep_read-windows-x64
-          path: dist/deep_read-windows-x64.zip
+          name: deep-read-web-windows-binaries
+          path: |
+            dist/deep_read-windows-x64.zip
+            dist/deep_read-windows-x64-with-chromium.zip
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -45,14 +57,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:GITHUB_REF_NAME
-          $asset = "dist\deep_read-windows-x64.zip"
+          $assets = @(
+            "dist\deep_read-windows-x64.zip",
+            "dist\deep_read-windows-x64-with-chromium.zip"
+          )
           $title = $tag
-          $notes = "Windows binary for deep-read-web."
+          $notes = @"
+          Windows binaries for deep-read-web.
+
+          Assets:
+          - deep_read-windows-x64.zip: minimal package, prefers system Edge/Chrome, smallest download
+          - deep_read-windows-x64-with-chromium.zip: full package, includes Playwright Chromium fallback
+          "@
 
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $asset --clobber
+            gh release upload $tag $assets --clobber
           }
           else {
-            gh release create $tag $asset --title $title --notes $notes
+            gh release create $tag $assets --title $title --notes $notes
           }

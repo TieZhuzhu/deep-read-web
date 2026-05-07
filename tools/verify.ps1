@@ -1,6 +1,8 @@
 param(
     [switch]$RunNetworkSmoke,
-    [switch]$UseBinary
+    [switch]$UseBinary,
+    [ValidateSet("auto", "msedge", "msedge-dev", "msedge-beta", "chrome", "chrome-dev", "chrome-beta", "chromium", "firefox")]
+    [string]$Browser = "auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -103,7 +105,7 @@ if ($helpResult.ExitCode -ne 0) {
 
 if ($RunNetworkSmoke) {
     Write-Host "Running public page smoke test..." -ForegroundColor Cyan
-    $smokeResult = Invoke-DeepRead @("--HTML_PAGE", "https://example.com", "--browser", "auto")
+    $smokeResult = Invoke-DeepRead @("--HTML_PAGE", "https://example.com", "--browser", $Browser)
     if ($smokeResult.ExitCode -ne 0) {
         throw "Public page smoke test failed with exit code $($smokeResult.ExitCode)."
     }

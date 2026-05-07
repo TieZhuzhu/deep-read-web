@@ -1,5 +1,6 @@
 param(
-    [switch]$BundleChromium
+    [ValidateSet("small", "full")]
+    [string]$Flavor = "small"
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,9 +43,16 @@ $binDir = Join-Path $repoRoot "skills\deep-read-web\bin"
 $distDir = Join-Path $repoRoot "dist"
 $pyiWorkDir = Join-Path $repoRoot "build\pyinstaller"
 $pyiSpecDir = Join-Path $repoRoot "build\spec"
-$zipPath = Join-Path $distDir "deep_read-windows-x64.zip"
 $exePath = Join-Path $binDir "deep_read.exe"
 $pythonCommand = Get-PythonCommand
+$shouldBundleChromium = $Flavor -eq "full"
+$archiveName = if ($shouldBundleChromium) {
+    "deep_read-windows-x64-with-chromium.zip"
+}
+else {
+    "deep_read-windows-x64.zip"
+}
+$zipPath = Join-Path $distDir $archiveName
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
@@ -52,13 +60,17 @@ New-Item -ItemType Directory -Force -Path $pyiWorkDir | Out-Null
 New-Item -ItemType Directory -Force -Path $pyiSpecDir | Out-Null
 
 Write-Host "Using Python command: $($pythonCommand -join ' ')" -ForegroundColor Cyan
+Write-Host "Build flavor: $Flavor" -ForegroundColor Cyan
 Write-Host "Installing build dependencies..." -ForegroundColor Cyan
 Invoke-Python -PythonCommand $pythonCommand -Arguments @("-m", "pip", "install", "playwright", "pyinstaller")
 
-if ($BundleChromium) {
+if ($shouldBundleChromium) {
     Write-Host "Bundling Playwright Chromium into the packaged build..." -ForegroundColor Cyan
     $env:PLAYWRIGHT_BROWSERS_PATH = "0"
     Invoke-Python -PythonCommand $pythonCommand -Arguments @("-m", "playwright", "install", "chromium")
+}
+else {
+    Remove-Item Env:PLAYWRIGHT_BROWSERS_PATH -ErrorAction SilentlyContinue
 }
 
 if (Test-Path $exePath) {

@@ -89,6 +89,11 @@ class AuthTimeoutError(Exception):
     """Raised when manual authentication does not finish in time."""
 
 
+def is_packaged_binary() -> bool:
+    """Return True when running from a packaged executable."""
+    return bool(getattr(sys, "frozen", False))
+
+
 def configure_stdio() -> None:
     """Force UTF-8 output where supported to avoid mojibake."""
     for stream in (sys.stdout, sys.stderr):
@@ -272,10 +277,19 @@ def launch_persistent_context(playwright, strategy: dict[str, str], headless: bo
     except Exception as exc:
         browser_name = strategy["browser_name"]
         if browser_name == "chromium":
+            if is_packaged_binary():
+                raise BrowserLaunchError(
+                    "无法启动 Chromium 回退浏览器。当前精简版未内置 Chromium，请优先使用系统 Edge/Chrome，"
+                    "或下载带 Chromium 的完整发布包。"
+                ) from exc
             raise BrowserLaunchError(
                 "无法启动 Playwright 自带 Chromium。请执行：py -3 -m playwright install chromium"
             ) from exc
         if browser_name == "firefox":
+            if is_packaged_binary():
+                raise BrowserLaunchError(
+                    "当前发布版未内置 Firefox。请改用 auto/msedge/chrome，或使用源码模式安装 Playwright Firefox。"
+                ) from exc
             raise BrowserLaunchError(
                 "无法启动 Playwright Firefox。请执行：py -3 -m playwright install firefox"
             ) from exc
